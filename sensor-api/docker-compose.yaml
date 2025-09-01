@@ -1,0 +1,20 @@
+services:
+  air-sensor:
+    build:
+      context: .
+    privileged: true
+    volumes:
+      - ./air_sensor.py:/usr/src/app/air_sensor.py
+      - ./main.py:/usr/src/app/main.py
+    command: python -u main.py
+
+  web-server:
+    build:
+      context: .
+    privileged: true
+    volumes:
+      - ./air_sensor.py:/usr/src/app/air_sensor.py
+      - ./webserver.py:/usr/src/app/webserver.py
+    ports:
+      - 8080:8080
+    command: python -u webserver.py
