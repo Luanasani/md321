@@ -10,7 +10,12 @@ import paho.mqtt.client as mqtt
 
 def on_connect(client, userdata, flags, reason_code, properites):
     print(f'Connected to MQTT Broker with result {reason_code}')
-    # client.subscribe('$SYS/#')
+
+
+def on_disconnect(client, userdata, reason_code, properties=None):  # pylint: disable=unused-argument
+    if reason_code != 0:
+        print('MQTT connection lost, attempting to reconnect...')
+
 
 
 def on_message(client, userdata, msg: object):
@@ -22,6 +27,7 @@ MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
 
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 mqtt_client.on_connect = on_connect
+mqtt_client.on_disconnect = on_disconnect
 mqtt_client.on_message = on_message
 mqtt_client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)
 
@@ -144,7 +150,20 @@ class Server(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
             self.wfile.write(response.encode())
-            mqtt_client.publish('serverPi/metrics', 'requested', qos=2)
+            publish('serverPi/metrics', 'requested')
+
+
+def readLightSensor(delay: float = 5):
+    while True:
+        try:
+            lux = round(lightSensor.readLight(), 2)
+            print(f'Light intensity: {lux} lux')
+            _cache_value('light', lux)
+            publish('mondaymorning/sensors/light', lux)
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f'Unable to read from BH1750 sensor: {exc}')
+        sleep(delay)
+
 
 
 def readLightSensor(delay: float = 5):
@@ -180,8 +199,9 @@ def main():
     lightSensorThread.start()
 
     try:
+        mqtt_client.connect_async(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)
         mqtt_client.loop_start()
-        mqtt_client.publish('mondaymorning/up', 'true', qos=2)
+        publish('mondaymorning/up', 'true')
         webServer.serve_forever()
     except KeyboardInterrupt:
         pass
