@@ -6,7 +6,19 @@ services:
     volumes:
       - ./air_sensor.py:/usr/src/app/air_sensor.py
       - ./main.py:/usr/src/app/main.py
+      - ./distance_sensor.py:/usr/src/app/distance_sensor.py
     command: python -u main.py
+
+    led-matrix:
+    build:
+      context: .
+    privileged: true
+    devices:
+      - "/dev/spidev0.0:/dev/spidev0.0"
+    volumes:
+      - ./led-matrix.py:/usr/src/app/led-matrix.py
+    working_dir: /usr/src/app
+    command: python3 led-matrix.py
 
   web-server:
     build:
@@ -14,7 +26,9 @@ services:
     privileged: true
     volumes:
       - ./air_sensor.py:/usr/src/app/air_sensor.py
+      - ./light_sensor.py:/usr/src/app/light_sensor.py
       - ./webserver.py:/usr/src/app/webserver.py
+      - ./distance_sensor.py:/usr/src/app/distance_sensor.py
     ports:
       - 8080:8080
     command: python -u webserver.py
