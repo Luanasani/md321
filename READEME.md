@@ -84,3 +84,14 @@ Passe bei Bedarf in `system-monitoring/prometheus/prometheus.yaml` die Zieladres
 5. Über den Zeitraum-Selector oben rechts kannst du den Betrachtungszeitraum anpassen, um z. B. Hell-/Dunkelwechsel sichtbar zu machen.
 
 > 🔐 Ändere das Admin-Passwort nach dem ersten Login oder hinterlege einen sicheren Wert über `GF_SECURITY_ADMIN_PASSWORD` im Compose-File.
+
+## Individuelle Sensor-Erweiterung
+
+Für schnelle Demos ohne zusätzliche Infrastruktur steht jetzt das Skript `sensor-api/sensor_showcase.py` bereit. Es simuliert Temperatur-, Licht- und Bewegungssensoren, sodass beim Start sofort Aktivität auf der Konsole sichtbar wird.
+
+```bash
+cd sensor-api
+python3 sensor_showcase.py --iterations 5 --delay 1.5
+```
+
+Die Parameter lassen sich frei anpassen (`--iterations` für die Anzahl der Runden, `--delay` für die Pause in Sekunden). Damit kannst du die Sensorlogik unkompliziert erweitern oder eigene Aktionen anstoßen, ohne Prometheus oder Grafana zu benötigen.
