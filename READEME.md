@@ -45,7 +45,7 @@ cd system-monitoring
 sudo docker compose up -d
 ```
 
-Prometheus ist anschließend unter `http://<host>:9090`, Grafana unter `http://<host>:3000` erreichbar. Im Prometheus-Target-Tab sollte `sensor-api` als neuer Job sichtbar sein.
+Prometheus ist anschließend unter `http://<host>:9090`, Grafana unter `http://<host>:3000` erreichbar. Im Prometheus-Target-Tab sollte `sensor-api` als neuer Job sichtbar sein. Grafana bringt bereits eine Prometheus-Datenquelle und ein Lux-Dashboard mit.
 Passe bei Bedarf in `system-monitoring/prometheus/prometheus.yaml` die Zieladresse des Raspberry Pi (`192.168.1.129:8080`) an.
 
 ## Nutzung in der Web-UI
@@ -66,5 +66,21 @@ Passe bei Bedarf in `system-monitoring/prometheus/prometheus.yaml` die Zieladres
 
 ## Validierung
 
-- Prüfe im Prometheus Web-UI (`http://<host>:9090/graph`) die Metrik `light`.
-- Richte in Grafana ein Panel mit der Query `light` ein und beobachte die automatischen Umschaltungen der Web-UI bei veränderten Lichtverhältnissen.
+### Prometheus-Metriken abfragen
+
+1. Öffne das Web-UI unter `http://<host>:9090/graph`.
+2. Wähle oben den Reiter **Graph** aus.
+3. Trage im Feld **Expression** den Metriknamen `light` ein und klicke auf **Execute**.
+4. Über **Graph** oder **Console** kannst du dir den aktuellen Wert sowie den Verlauf anzeigen lassen.
+
+> ℹ️ Weitere Metriken der Sensor-API (z. B. `sensor_temperature_celsius` oder `sensor_humidity_percent`) lassen sich auf die gleiche Weise prüfen.
+
+### Grafana-Dashboard aufrufen
+
+1. Rufe `http://<host>:3000` im Browser auf.
+2. Melde dich mit Benutzername `admin` und Passwort `admin` an (Grafana fordert beim ersten Login zur Änderung des Passworts auf).
+3. Öffne nach dem ersten Login **Dashboards → Browse**. Unter dem Ordner **Light Automation** findest du das automatisch bereitgestellte Dashboard „Light Automation Overview“ mit einem Zeitreihen-Panel, zwei Gauges und der Query `light`.
+4. Möchtest du eigene Panels hinzufügen, kannst du im Dashboard auf **Edit** klicken oder ein neues Dashboard anlegen; dank der vorprovisionierten Prometheus-Datenquelle steht die Metrik `light` sofort zur Auswahl.
+5. Über den Zeitraum-Selector oben rechts kannst du den Betrachtungszeitraum anpassen, um z. B. Hell-/Dunkelwechsel sichtbar zu machen.
+
+> 🔐 Ändere das Admin-Passwort nach dem ersten Login oder hinterlege einen sicheren Wert über `GF_SECURITY_ADMIN_PASSWORD` im Compose-File.
