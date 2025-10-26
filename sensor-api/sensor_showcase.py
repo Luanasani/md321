@@ -1,41 +1,47 @@
-"""Interactive sensor showcase.
-
-This module extends the sensor demo setup with a simple event loop that
-simulates readings from a couple of physical sensors.  It can be executed on
-any machine without Raspberry Pi hardware but still gives immediate visual
-feedback on the console.  The goal is to keep the workflow lightweight: start
-it, and something happens right away.
-
-Usage::
-
-    python3 sensor_showcase.py --iterations 10 --delay 1.5
-
-The script prints colourful status lines for the virtual temperature, light and
-motion sensors and highlights unusual values.
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-from __future__ import annotations
+Interaktiver Sensor-Showcase mit echten Sensoren (Joy-Pi)
+Autor: Luanasani
 
+Erfasst Temperatur, Luftfeuchtigkeit, Helligkeit und Bewegung
+vom Joy-Pi-Board und gibt die Werte in der Konsole aus.
+"""
+
+import RPi.GPIO as GPIO
+import smbus2
+import time
+import random
 from dataclasses import dataclass
 from datetime import datetime
-import argparse
-import random
-import time
-from typing import Callable, Iterable, List
+import adafruit_dht
+import board
+
+
+# --- Sensor-Definitionen ---
+BH1750_ADDR = 0x5C       # BH1750 Lichtsensor (Joy-Pi)
+DHT_PIN = board.D4        # GPIO 4 für DHT11
+MOTION_PIN = 16           # GPIO 16 für PIR-Sensor
+
+
+# --- Setup ---
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(MOTION_PIN, GPIO.IN)
+
+bus = smbus2.SMBus(1)
+dhtDevice = adafruit_dht.DHT11(DHT_PIN, use_pulseio=False)
 
 
 @dataclass
 class SensorReading:
-    """Single sensor reading that can be printed on the console."""
-
     sensor: str
     value: float
     unit: str
     message: str
     severity: str = "info"
 
-    def render(self) -> str:
-        """Return a human friendly representation with a small icon."""
-
+    def render(self):
         icons = {
             "info": "ℹ️",
             "ok": "✅",
@@ -47,94 +53,96 @@ class SensorReading:
 
 
 class SensorShowcase:
-    """Generate playful readings for a couple of sensors."""
+    """Erfasst reale Sensordaten vom Joy-Pi, mit stabiler Abfrage."""
 
-    def __init__(self) -> None:
-        # Each callable returns a SensorReading instance.
-        self._sensors: List[Callable[[], SensorReading]] = [
+    def __init__(self):
+        self._sensors = [
             self._temperature_sensor,
+            self._humidity_sensor,
             self._light_sensor,
             self._motion_sensor,
         ]
 
-    def poll(self) -> Iterable[SensorReading]:
-        """Yield one reading per configured sensor."""
-
+    def poll(self):
         for sensor in self._sensors:
             yield sensor()
 
-    @staticmethod
-    def _temperature_sensor() -> SensorReading:
-        value = random.uniform(19.0, 31.5)
-        if value > 29.5:
-            severity = "alert"
-            message = "Lüftung einschalten!"
-        elif value > 26.0:
-            severity = "warn"
-            message = "Ganz schön warm hier."
-        else:
-            severity = "ok"
-            message = "Temperatur im Wohlfühlbereich."
-        return SensorReading("Temperatur", value, "°C", message, severity)
+    # Temperatur
+    def _temperature_sensor(self):
+        try:
+            temp = dhtDevice.temperature
+            if temp is None:
+                raise ValueError("Keine Messung erhalten.")
+            if temp > 29.5:
+                msg, sev = "Lüftung einschalten!", "alert"
+            elif temp > 26.0:
+                msg, sev = "Ganz schön warm hier.", "warn"
+            else:
+                msg, sev = "Temperatur im Wohlfühlbereich.", "ok"
+            return SensorReading("Temperatur", temp, "°C", msg, sev)
+        except Exception as e:
+            temp = random.uniform(20, 28)
+            return SensorReading("Temperatur", temp, "°C", f"Fehler: {e}", "warn")
 
-    @staticmethod
-    def _light_sensor() -> SensorReading:
-        value = random.uniform(10.0, 750.0)
-        if value < 60.0:
-            severity = "warn"
-            message = "Licht an? Es ist ziemlich dunkel."
-        elif value > 600.0:
-            severity = "warn"
-            message = "Sehr hell – eventuell Blendgefahr."
-        else:
-            severity = "ok"
-            message = "Helligkeit ist angenehm."
-        return SensorReading("Helligkeit", value, "Lux", message, severity)
+    # Luftfeuchtigkeit
+    def _humidity_sensor(self):
+        try:
+            hum = dhtDevice.humidity
+            if hum is None:
+                raise ValueError("Keine Messung erhalten.")
+            if hum < 30:
+                msg, sev = "Luft zu trocken – ggf. befeuchten.", "warn"
+            elif hum > 70:
+                msg, sev = "Sehr feucht – lüften empfohlen.", "warn"
+            else:
+                msg, sev = "Feuchtigkeit im optimalen Bereich.", "ok"
+            return SensorReading("Luftfeuchtigkeit", hum, "%", msg, sev)
+        except Exception as e:
+            hum = random.uniform(40, 60)
+            return SensorReading("Luftfeuchtigkeit", hum, "%", f"Fehler: {e}", "warn")
 
-    @staticmethod
-    def _motion_sensor() -> SensorReading:
-        value = random.random()
-        if value > 0.8:
-            severity = "alert"
-            message = "Bewegung erkannt! Sicherheitscheck durchführen."
-        elif value > 0.4:
-            severity = "ok"
-            message = "Leichte Aktivität im Raum."
-        else:
-            severity = "ok"
-            message = "Alles ruhig."
-        return SensorReading("Bewegung", value * 100, "%", message, severity)
+    # Helligkeit (BH1750)
+    def _light_sensor(self):
+        try:
+            data = bus.read_i2c_block_data(BH1750_ADDR, 0x20, 2)
+            lux = (data[0] << 8 | data[1]) / 1.2
+            if lux < 60:
+                msg, sev = "Licht an? Es ist ziemlich dunkel.", "warn"
+            elif lux > 600:
+                msg, sev = "Sehr hell – eventuell Blendgefahr.", "warn"
+            else:
+                msg, sev = "Helligkeit ist angenehm.", "ok"
+            return SensorReading("Helligkeit", lux, "Lux", msg, sev)
+        except Exception as e:
+            lux = random.uniform(10, 400)
+            return SensorReading("Helligkeit", lux, "Lux", f"I2C-Fehler: {e}", "warn")
+
+    # Bewegung (PIR)
+    def _motion_sensor(self):
+        try:
+            motion = GPIO.input(MOTION_PIN)
+            if motion:
+                return SensorReading("Bewegung", 100, "%", "Bewegung erkannt!", "alert")
+            else:
+                return SensorReading("Bewegung", 0, "%", "Alles ruhig.", "ok")
+        except Exception as e:
+            return SensorReading("Bewegung", 0, "%", f"GPIO Fehler: {e}", "warn")
 
 
-def run_showcase(iterations: int, delay: float) -> None:
-    """Run the demo loop with the given number of iterations."""
-
+def run_showcase(iterations=10, delay=2.5):
     showcase = SensorShowcase()
-    for _ in range(iterations):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"\n[{timestamp}] Sensorrunde")
-        for reading in showcase.poll():
-            print("  " + reading.render())
-        time.sleep(delay)
-
-
-def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Starte die Sensor-Demo-Schleife.")
-    parser.add_argument(
-        "--iterations",
-        type=int,
-        default=5,
-        help="Wie oft eine Sensorrunde ausgeführt wird (Standard: 5).",
-    )
-    parser.add_argument(
-        "--delay",
-        type=float,
-        default=2.0,
-        help="Wartezeit zwischen zwei Runden in Sekunden (Standard: 2.0).",
-    )
-    return parser.parse_args(argv)
+    try:
+        for i in range(iterations):
+            ts = datetime.now().strftime("%H:%M:%S")
+            print(f"\n[{ts}] Sensorrunde {i+1}")
+            for reading in showcase.poll():
+                print("  " + reading.render())
+            time.sleep(delay)
+    except KeyboardInterrupt:
+        print("\nBeendet durch Benutzer.")
+    finally:
+        GPIO.cleanup()
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    run_showcase(args.iterations, args.delay)
+    run_showcase()
