@@ -2,6 +2,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from time import sleep
 import threading
 import json
+import os
 from typing import Any, Dict
 
 import paho.mqtt.client as mqtt
@@ -16,10 +17,13 @@ def on_message(client, userdata, msg: object):
     print(msg.topic + ' ' + str(msg.payload))
 
 
+MQTT_BROKER_HOST = os.getenv('MQTT_BROKER_HOST', '192.168.1.129')
+MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
+
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
-mqtt_client.connect('172.17.0.1', 1883, 60)
+mqtt_client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)
 
 from air_sensor import AirSensor
 from light_sensor import LightSensor

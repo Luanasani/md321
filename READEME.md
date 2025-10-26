@@ -8,7 +8,7 @@ Diese Erweiterung ergänzt das bestehende verteilte System um einen automatische
 BH1750 → Sensor-API → MQTT-Broker → Prometheus → Grafana → Web-UI
 ```
 
-1. **Sensor-API** (Raspberry Pi):
+1. **Sensor-API** (Raspberry Pi unter `192.168.1.129`):
    - Liest den BH1750-Lichtsensor im Sekundenrhythmus aus.
    - Veröffentlicht die Lux-Werte auf dem MQTT-Topic `mondaymorning/sensors/light`.
    - Stellt die Messwerte zusätzlich über den HTTP-Endpunkt `http://<pi>:8080/metrics` im Prometheus-Format bereit.
@@ -19,17 +19,21 @@ BH1750 → Sensor-API → MQTT-Broker → Prometheus → Grafana → Web-UI
 
 ## Komponenten starten
 
+> 💡 Für alle Docker-Kommandos muss der Benutzer Mitglied der `docker`-Gruppe sein oder die Befehle mit `sudo` ausführen.
+
 ### MQTT-Broker
 
 ```bash
-docker compose up -d  # im Projektwurzelverzeichnis
+# aus dem Projektwurzelverzeichnis
+sudo docker compose up -d
 ```
 
 ### Sensor-API
 
 ```bash
 cd sensor-api
-sudo docker compose up --build
+# optional: andere Broker-Adresse per Umgebungsvariable setzen
+sudo MQTT_BROKER_HOST=192.168.1.129 MQTT_BROKER_PORT=1883 docker compose up --build
 ```
 
 > 💡 Durch den `privileged`-Modus erhält der Container Zugriff auf die I²C-Schnittstelle des Raspberry Pi.
@@ -38,24 +42,29 @@ sudo docker compose up --build
 
 ```bash
 cd system-monitoring
-docker compose up -d
+sudo docker compose up -d
 ```
 
 Prometheus ist anschließend unter `http://<host>:9090`, Grafana unter `http://<host>:3000` erreichbar. Im Prometheus-Target-Tab sollte `sensor-api` als neuer Job sichtbar sein.
+Passe bei Bedarf in `system-monitoring/prometheus/prometheus.yaml` die Zieladresse des Raspberry Pi (`192.168.1.129:8080`) an.
 
 ## Nutzung in der Web-UI
 
 - Öffne `dashboard/index.html` über einen lokalen Webserver oder hoste die Datei z. B. via `python -m http.server`.
-- Stelle sicher, dass der Browser den MQTT-Websocket unter `ws://<broker-host>:9001` erreicht.
+- Stelle sicher, dass der Browser den MQTT-Websocket unter `ws://192.168.1.129:9001` erreicht. Über den Query-Parameter `?host=<ziel>`
+  lässt sich bei Bedarf ein anderer Host setzen, z. B. `http://localhost:8000/index.html?host=192.168.1.129`.
 - Die Oberfläche zeigt den aktuellen Lux-Wert, den letzten Empfangszeitpunkt und ändert das Farbschema automatisch. Über den Link „In Grafana ansehen“ gelangt man direkt zur Visualisierung.
+- Standardmäßig greift die Web-UI auf den Host `192.168.1.129` zu. Eine Anpassung ist sowohl über den Query-Parameter als auch direkt im
+  Skript (`DEFAULT_HOST` in `dashboard/index.html`) möglich.
 
 ## Anpassungen & Grenzwerte
 
 - Der Schwellenwert für den Dark-Mode liegt bei **150 Lux** und kann in `dashboard/index.html` (`LIGHT_THRESHOLD`) angepasst werden.
+- MQTT-Broker-Adresse und -Port der Sensor-API lassen sich über die Umgebungsvariablen `MQTT_BROKER_HOST` und `MQTT_BROKER_PORT`
+  anpassen (Standard: `192.168.1.129:1883`).
 - Bei Auslesefehlern des BH1750 (z. B. fehlende Verkabelung) werden im Log entsprechende Hinweise ausgegeben; die letzte erfolgreiche Messung bleibt verfügbar und wird weiterhin für Prometheus- und MQTT-Clients bereitgestellt.
 
 ## Validierung
 
 - Prüfe im Prometheus Web-UI (`http://<host>:9090/graph`) die Metrik `light`.
 - Richte in Grafana ein Panel mit der Query `light` ein und beobachte die automatischen Umschaltungen der Web-UI bei veränderten Lichtverhältnissen.
-

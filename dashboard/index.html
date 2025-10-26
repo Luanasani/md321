@@ -145,7 +145,17 @@
 
     <script src="mqtt.min.js"></script>
     <script>
-        const broker = `ws://${window.location.hostname}:9001`;
+        const params = new URLSearchParams(window.location.search);
+        const DEFAULT_HOST = '192.168.1.129';
+        const rawHost = window.location.hostname;
+        const resolvedHost = params.get('host') || (rawHost ? rawHost : DEFAULT_HOST);
+        const protocol = window.location.protocol.startsWith('https') ? 'https' : 'http';
+        const wsProtocol = protocol === 'https' ? 'wss' : 'ws';
+
+        const broker = `${wsProtocol}://${resolvedHost}:9001`;
+        const apiBase = `${protocol}://${resolvedHost}:8080`;
+        const grafanaBase = `${protocol}://${resolvedHost}:3000`;
+
         const mqttClient = mqtt.connect(broker);
         const LIGHT_TOPIC_SUFFIX = '/light';
         const LIGHT_THRESHOLD = 150;
@@ -157,6 +167,7 @@
         const modeDescription = document.getElementById('mode-description');
         const grafanaLink = document.getElementById('open-grafana');
         const root = document.body;
+        const brokerLabel = resolvedHost;
 
         function formatDate(date) {
             return date.toLocaleString(undefined, {
@@ -183,8 +194,8 @@
         function updateConnectionState(isOnline) {
             mqttStatus.classList.toggle('is-online', isOnline);
             mqttStatusText.textContent = isOnline
-                ? 'Mit dem MQTT-Broker verbunden'
-                : 'Warte auf Verbindung zum MQTT-Broker…';
+                ? `Mit dem MQTT-Broker ${brokerLabel} verbunden`
+                : `Warte auf Verbindung zum MQTT-Broker ${brokerLabel}…`;
         }
 
         function handleLightMessage(message) {
@@ -217,13 +228,12 @@
 
         grafanaLink.addEventListener('click', (event) => {
             event.preventDefault();
-            const grafanaUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
-            window.open(grafanaUrl, '_blank', 'noopener');
+            window.open(grafanaBase, '_blank', 'noopener');
         });
 
         async function hydrateFromApi() {
             try {
-                const response = await fetch(`${window.location.protocol}//${window.location.hostname}:8080/`);
+                const response = await fetch(`${apiBase}/`);
                 if (!response.ok) {
                     throw new Error(`API responded with status ${response.status}`);
                 }
