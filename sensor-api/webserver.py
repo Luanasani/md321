@@ -8,11 +8,7 @@ from typing import Any, Dict
 import paho.mqtt.client as mqtt
 
 
-MQTT_BROKER_HOST = os.getenv('MQTT_BROKER_HOST', '192.168.1.129')
-MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
-
-
-def on_connect(client, userdata, flags, reason_code, properties):  # pylint: disable=unused-argument
+def on_connect(client, userdata, flags, reason_code, properites):
     print(f'Connected to MQTT Broker with result {reason_code}')
 
 
@@ -21,24 +17,19 @@ def on_disconnect(client, userdata, reason_code, properties=None):  # pylint: di
         print('MQTT connection lost, attempting to reconnect...')
 
 
+
 def on_message(client, userdata, msg: object):
     print(msg.topic + ' ' + str(msg.payload))
 
+
+MQTT_BROKER_HOST = os.getenv('MQTT_BROKER_HOST', '192.168.1.129')
+MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
 
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 mqtt_client.on_connect = on_connect
 mqtt_client.on_disconnect = on_disconnect
 mqtt_client.on_message = on_message
-mqtt_client.reconnect_delay_set(min_delay=1, max_delay=30)
-
-
-def publish(topic: str, payload: Any, qos: int = 2) -> None:
-    try:
-        result = mqtt_client.publish(topic, payload, qos=qos)
-        if result.rc != mqtt.MQTT_ERR_SUCCESS:
-            print(f'Failed to publish to {topic}: rc={result.rc}')
-    except Exception as exc:  # pylint: disable=broad-except
-        print(f'Unable to publish to {topic}: {exc}')
+mqtt_client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)
 
 from air_sensor import AirSensor
 from light_sensor import LightSensor
@@ -126,7 +117,7 @@ class Server(BaseHTTPRequestHandler):
             try:
                 light_value = get_light_value()
             except Exception:
-                light_value = float('nan')
+                light_value = 'nan'
 
             with latest_values_lock:
                 distance_value = latest_values.get('distance')
@@ -174,13 +165,26 @@ def readLightSensor(delay: float = 5):
         sleep(delay)
 
 
+
+def readLightSensor(delay: float = 5):
+    while True:
+        try:
+            lux = round(lightSensor.readLight(), 2)
+            print(f'Light intensity: {lux} lux')
+            _cache_value('light', lux)
+            mqtt_client.publish('mondaymorning/sensors/light', lux, qos=2)
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f'Unable to read from BH1750 sensor: {exc}')
+        sleep(delay)
+
+
 def readDistanceSensor(delay: float = 1):
     while True:
         try:
             distance = distanceSensor.read()
             print(f'Distance: {distance} cm')
             _cache_value('distance', distance)
-            publish('mondaymorning/sensors/distance', distance)
+            mqtt_client.publish('mondaymorning/sensors/distance', distance, qos=2)
         except Exception as exc:  # pylint: disable=broad-except
             print(f'Unable to read distance sensor value: {exc}')
         sleep(delay)
