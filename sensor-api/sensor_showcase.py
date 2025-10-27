@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import adafruit_dht
 import board
+from prometheus_client import Gauge, start_http_server
 
 
 # --- Sensor-Definitionen ---
@@ -31,6 +32,25 @@ GPIO.setup(MOTION_PIN, GPIO.IN)
 
 bus = smbus2.SMBus(1)
 dhtDevice = adafruit_dht.DHT11(DHT_PIN, use_pulseio=False)
+
+
+# --- Prometheus Metriken ---
+TEMPERATURE_GAUGE = Gauge(
+    "joypi_temperature_celsius",
+    "Aktuelle Temperaturmessung des Joy-Pi in Grad Celsius",
+)
+HUMIDITY_GAUGE = Gauge(
+    "joypi_humidity_percent",
+    "Relative Luftfeuchtigkeit des Joy-Pi in Prozent",
+)
+LIGHT_GAUGE = Gauge(
+    "joypi_light_lux",
+    "Gemessene Beleuchtungsstärke des Joy-Pi in Lux",
+)
+MOTION_GAUGE = Gauge(
+    "joypi_motion_detected",
+    "Bewegungserkennung des Joy-Pi (1 = Bewegung, 0 = keine Bewegung)",
+)
 
 
 @dataclass
@@ -66,6 +86,17 @@ class SensorShowcase:
     def poll(self):
         for sensor in self._sensors:
             yield sensor()
+
+    @staticmethod
+    def update_metrics(reading: SensorReading):
+        if reading.sensor == "Temperatur":
+            TEMPERATURE_GAUGE.set(reading.value)
+        elif reading.sensor == "Luftfeuchtigkeit":
+            HUMIDITY_GAUGE.set(reading.value)
+        elif reading.sensor == "Helligkeit":
+            LIGHT_GAUGE.set(reading.value)
+        elif reading.sensor == "Bewegung":
+            MOTION_GAUGE.set(1 if reading.value else 0)
 
     # Temperatur
     def _temperature_sensor(self):
@@ -129,14 +160,21 @@ class SensorShowcase:
             return SensorReading("Bewegung", 0, "%", f"GPIO Fehler: {e}", "warn")
 
 
-def run_showcase(iterations=10, delay=2.5):
+def run_showcase(iterations=None, delay=2.5, metrics_port=8000):
     showcase = SensorShowcase()
+    start_http_server(metrics_port)
+    print(
+        f"Prometheus-Metriken werden unter http://localhost:{metrics_port}/metrics bereitgestellt."
+    )
     try:
-        for i in range(iterations):
+        iteration = 0
+        while iterations is None or iteration < iterations:
+            iteration += 1
             ts = datetime.now().strftime("%H:%M:%S")
-            print(f"\n[{ts}] Sensorrunde {i+1}")
+            print(f"\n[{ts}] Sensorrunde {iteration}")
             for reading in showcase.poll():
                 print("  " + reading.render())
+                showcase.update_metrics(reading)
             time.sleep(delay)
     except KeyboardInterrupt:
         print("\nBeendet durch Benutzer.")
